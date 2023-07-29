@@ -137,7 +137,7 @@ class ToiletEnemy:  # default toilet enemy class
                           self.w, self.h, 0)
 
     def __update_pos(self):
-        if not self.flashed:
+        if not self.flashed and self.alive:
             self.all_positions = {(x, y)
                                   for x in range(self.x, self.x + 8)
                                   for y in range(self.y, self.y + 9)}
@@ -205,8 +205,9 @@ class ToiletEnemy:  # default toilet enemy class
                 if can_target:
                     self.targeted = True
 
-    def get_damaged(self):
-        self.alive = False
+    def get_damaged(self, punch_pos):
+        if self.all_positions.intersection(punch_pos):
+            self.alive = False
 
     def draw(self):
         self.__animate()
@@ -231,15 +232,11 @@ class EnemiesControl:  # aggregator of toilets/enemies
             toilet.draw()
             self.positions()
 
-    @staticmethod
-    def __punch_control(toilet, punch_pos):
+    def punch_control(self, punch_pos):
         if len(punch_pos):
-            # print(111)
-            # if len(toilet.all_positions.intersection(punch_pos)):
-            if toilet.all_positions.intersection(punch_pos):
-                # print(toilet.all_positions.intersection(punch_pos))
-                toilet.get_damaged()
-                print(toilet.alive)
+            for toilet in self.toilets:
+                toilet.get_damaged(punch_pos)
+
 
     @staticmethod
     def __flash_control(toilet, light_positions, right_direction):
@@ -273,9 +270,6 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
         for toilet in self.toilets:
             result.update(toilet.all_positions)
-            self.__punch_control(toilet, self.punch_pos)
-
-            # TODO refactor punch
 
             self.__flash_control(toilet, light_positions, right_direction)
 
@@ -542,9 +536,9 @@ class Cameraman:  # user class
     def get_punch_positions(self):
         if self.punch:
             if self.w > 0:
-                result = {(x, self.y - 4) for x in range(self.x + 8, self.x + 8 * 4)}
+                result = {(x, self.y + 4) for x in range(self.x + 8, self.x + 8 * 4)}
             else:
-                result = {(x, self.y - 4) for x in range(self.x, self.x - 8 * 3)}
+                result = {(x, self.y + 4) for x in range(self.x - 8 * 3, self.x)}
         else:
             result = set()
 
@@ -649,9 +643,8 @@ class App:  # game class
         self.hero_positions[1] = self.hero.y
         self.flash_pos[0] = self.hero.light_pos[0]
         self.flash_pos[1] = self.hero.light_pos[1]
-
+        self.enemies.punch_control(self.hero.get_punch_positions())
         self.enemies.positions()
-        self.enemies.punch_pos = self.hero.get_punch_positions()
 
     def pause(self):
 
