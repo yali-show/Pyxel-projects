@@ -96,10 +96,12 @@ class ToiletEnemy:  # default toilet enemy class
         self.hero_pos = hero
         self.animation = ((0, 0), (8, 0), (8, 0), (16, 0), (0, 0))
         self.flashed_animation = ((0, 0), (24, 0), (24, 0), (24, 0), (0, 0))
+        self.deth_animation = ((24, 0), (24, 0), (24, 0), (32, 0), (24, 0))
         self.w = 8
         self.h = 8
         self.animation_count = 0
         self.flashed_timer = 30
+        self.deth_timer = 80
         self.targeted = False
         self.alive = True
         self.flashed = False
@@ -107,6 +109,7 @@ class ToiletEnemy:  # default toilet enemy class
         self.all_positions = {(x, y)
                               for x in range(self.x, self.x + 8)
                               for y in range(self.y - 1, self.y + 9)}
+        self.all_positions_flashed = self.all_positions
         self.direction_rigth = dir_rigth
 
     def __animate(self):
@@ -129,18 +132,20 @@ class ToiletEnemy:  # default toilet enemy class
                           self.w, self.h, 0)
                 self.__update_pos()
         else:
-            if self.flashed_timer > 0:
-                self.flashed_timer -= 5
+            self.__update_pos()
+            if self.deth_timer > 0:
                 pyxel.blt(self.x, self.y, 0,
                           24,
                           0,
                           self.w, self.h, 0)
+            self.deth_timer -= 1
 
     def __update_pos(self):
         if not self.flashed and self.alive:
             self.all_positions = {(x, y)
                                   for x in range(self.x, self.x + 8)
                                   for y in range(self.y, self.y + 9)}
+            self.all_positions_flashed = self.all_positions
             self.__attack()
         else:
             self.all_positions = set()
@@ -205,20 +210,26 @@ class ToiletEnemy:  # default toilet enemy class
                 if can_target:
                     self.targeted = True
 
-    def get_damaged(self, punch_pos):
-        if self.all_positions.intersection(punch_pos):
-            self.alive = False
+    def get_damaged(self, hero_dir, punch_pos):
+        if not self.direction_rigth and hero_dir:
+            if self.all_positions_flashed.intersection(punch_pos):
+                self.alive = False
+
+        elif not hero_dir and self.direction_rigth:
+            if self.all_positions_flashed.intersection(punch_pos):
+                self.alive = False
 
     def draw(self):
         self.__animate()
 
 
 class EnemiesControl:  # aggregator of toilets/enemies
-    def __init__(self, blocks, hero_pos, flash_pos):
+    def __init__(self, blocks, hero_pos, flash_pos, hero_direction=True):
         self.blocks = blocks
         self.hero = hero_pos
         self.light_pos = flash_pos
         self.punch_pos = set()
+        self.hero_dir_right = hero_direction
         self.toilets = self.__setup_enemies()
         self.positions()
 
@@ -235,8 +246,7 @@ class EnemiesControl:  # aggregator of toilets/enemies
     def punch_control(self, punch_pos):
         if len(punch_pos):
             for toilet in self.toilets:
-                toilet.get_damaged(punch_pos)
-
+                toilet.get_damaged(self.hero_dir_right, punch_pos)
 
     @staticmethod
     def __flash_control(toilet, light_positions, right_direction):
@@ -643,6 +653,10 @@ class App:  # game class
         self.hero_positions[1] = self.hero.y
         self.flash_pos[0] = self.hero.light_pos[0]
         self.flash_pos[1] = self.hero.light_pos[1]
+        self.__enemies_updates()
+
+    def __enemies_updates(self):
+        self.enemies.hero_dir_right = False if self.hero.w > 0 else True
         self.enemies.punch_control(self.hero.get_punch_positions())
         self.enemies.positions()
 
