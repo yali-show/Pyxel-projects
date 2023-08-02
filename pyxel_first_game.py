@@ -2,10 +2,11 @@ import pyxel
 
 
 class Block:  # blocks and barier class
-    def __init__(self, x, y):
+    def __init__(self, x, y, texture=(24, 8)):
         self.x = x
         self.y = y
         self.wh = 8
+        self.texture = texture
         self.top_positions = {(x, y)
                               for x in range(self.x, self.x + 8)
                               for y in range(self.y, self.y + 1)}
@@ -25,7 +26,7 @@ class Block:  # blocks and barier class
                            for y in range(self.y + 1, self.y + 7)}
 
     def draw(self):
-        pyxel.blt(self.x, self.y, 0, 24, 8, 8, 8)
+        pyxel.blt(self.x, self.y, 0, self.texture[0], self.texture[1], 8, 8)
 
 
 class Constructor:  # aggregator of blocks objects
@@ -42,17 +43,15 @@ class Constructor:  # aggregator of blocks objects
 
         blocks = set()
 
-        for i in range(24):
+        for i in range(25):
             blocks.add(Block(i * 8, 112))
 
-        blocks.add(Block(10 * 4, 104))
-        blocks.add(Block(10, 104))
+        # blocks.add(Block(10 * 9, 104))
 
-        #
-        # for i in range(10):
-        #     blocks.add(Block(i * 8, 92))
+        for i in range(10):
+            blocks.add(Block(i * 8, 92))
 
-        # for i in range(12):
+        # for i in range(13):
         #     blocks.add(Block(i * 8 + 100, 82))
 
         return blocks
@@ -94,9 +93,9 @@ class ToiletEnemy:  # default toilet enemy class
         self.y = y
         self.positions = blocks_pos
         self.hero_pos = hero
-        self.animation = ((0, 0), (8, 0), (8, 0), (16, 0), (0, 0))
-        self.flashed_animation = ((0, 0), (24, 0), (24, 0), (24, 0), (0, 0))
-        self.deth_animation = ((24, 0), (24, 0), (24, 0), (32, 0), (24, 0))
+        self.animation = ((32, 0), (8, 0), (8, 0), (16, 0), (32, 0))
+        self.flashed_animation = ((32, 0), (24, 0), (24, 0), (24, 0), (32, 0))
+        self.deth_animation = ((24, 0), (24, 0), (24, 0), (32, 8), (24, 0))
         self.w = 8
         self.h = 8
         self.animation_count = 0
@@ -125,7 +124,7 @@ class ToiletEnemy:  # default toilet enemy class
                           self.w, self.h, 0)
                 self.__move()
             else:
-
+                self.targeted = False
                 pyxel.blt(self.x, self.y, 0,
                           self.flashed_animation[self.animation_count // 5][0],
                           self.flashed_animation[self.animation_count // 5][1],
@@ -193,9 +192,10 @@ class ToiletEnemy:  # default toilet enemy class
         if self.direction_rigth is False:
             if self.x > self.hero_pos[0] and self.y == self.hero_pos[1]:
                 can_target = True
-                for x in self.positions[3][self.y]:
-                    if self.x - self.hero_pos[0] > self.x - x:
-                        can_target = False
+                if self.y in self.positions[3]:
+                    for x in self.positions[3][self.y]:
+                        if self.x - self.hero_pos[0] > self.x - x:
+                            can_target = False
 
                 if can_target:
                     self.targeted = True
@@ -203,21 +203,25 @@ class ToiletEnemy:  # default toilet enemy class
         elif self.direction_rigth:
             if self.x < self.hero_pos[0] and self.y == self.hero_pos[1]:
                 can_target = True
-                for x in self.positions[3][self.y]:
-                    if self.hero_pos[0] - self.x < x - self.x:
-                        can_target = False
+                if self.y in self.positions[3]:
+                    for x in self.positions[3][self.y]:
+                        if self.hero_pos[0] - self.x < x - self.x:
+                            can_target = False
 
                 if can_target:
                     self.targeted = True
 
     def get_damaged(self, hero_dir, punch_pos):
-        if not self.direction_rigth and hero_dir:
-            if self.all_positions_flashed.intersection(punch_pos):
-                self.alive = False
+        if self.alive:
+            if not self.direction_rigth and hero_dir:
+                if self.all_positions_flashed.intersection(punch_pos):
+                    self.alive = False
+                    pyxel.play(2, 6)
 
-        elif not hero_dir and self.direction_rigth:
-            if self.all_positions_flashed.intersection(punch_pos):
-                self.alive = False
+            elif not hero_dir and self.direction_rigth:
+                if self.all_positions_flashed.intersection(punch_pos):
+                    self.alive = False
+                    pyxel.play(2, 6)
 
     def draw(self):
         self.__animate()
@@ -234,8 +238,10 @@ class EnemiesControl:  # aggregator of toilets/enemies
         self.positions()
 
     def __setup_enemies(self):
-        toilet = ToiletEnemy(150, 104, self.blocks, self.hero)
-        result = (toilet, )
+        # toilet1 = ToiletEnemy(150, 74, self.blocks, self.hero)
+        toilet2 = ToiletEnemy(150, 104, self.blocks, self.hero)
+        # toilet3 = ToiletEnemy(20, 84, self.blocks, self.hero)
+        result = (toilet2, )
         return result
 
     def draw(self):
@@ -254,16 +260,21 @@ class EnemiesControl:  # aggregator of toilets/enemies
             if light_positions[1] == toilet.y:
                 if right_direction and not toilet.direction_rigth:
                     if light_positions[0] < toilet.x:
-
-                        for x in toilet.positions[3][toilet.y]:
-                            if light_positions[0] > x:
-                                toilet.flashed = True
+                        if toilet.y in toilet.positions[3]:
+                            for x in toilet.positions[3][toilet.y]:
+                                if light_positions[0] > x:
+                                    toilet.flashed = True
+                        else:
+                            toilet.flashed = True
 
                 elif not right_direction and toilet.direction_rigth:
                     if light_positions[0] > toilet.x:
-                        for x in toilet.positions[3][toilet.y]:
-                            if light_positions[0] > x:
-                                toilet.flashed = True
+                        if toilet.y in toilet.positions[3]:
+                            for x in toilet.positions[3][toilet.y]:
+                                if light_positions[0] > x:
+                                    toilet.flashed = True
+                        else:
+                            toilet.flashed = True
 
     def positions(self):
         """
@@ -310,8 +321,8 @@ class Cameraman:  # user class
         self.punch_timer = 0
         self.jump_count = 20
         self.animation_count = 0
-        self.animation_immortal = ((40, 0), (32, 0), (40, 0), (40, 0), (40, 0))
-        self.animation_punch = (64, 8)
+        self.animation_immortal = ((40, 0), (32, 8), (40, 0), (40, 0), (40, 0))
+        self.animation_punch = (0, 8)
         self.animation_stand = ((40, 0), (40, 8), (40, 8), (40, 8), (40, 8))
         self.animation_move = ((48, 8), (56, 8), (56, 8), (48, 8), (56, 8))
         self.light_pos = ([], [])
@@ -335,11 +346,13 @@ class Cameraman:  # user class
                       self.w, self.h, 0)
         else:
             if self.punch:
+                side = self.w / 8
 
-                pyxel.blt(self.x, self.y, 0,
+                pyxel.blt(self.x - 8 if side != 1 else self.x,
+                          self.y, 0,
                           self.animation_punch[0],
                           self.animation_punch[1],
-                          self.w, self.h, 0)
+                          side * 16, self.h, 0)
 
             elif self.in_move:
                 pyxel.blt(self.x, self.y, 0,
@@ -414,7 +427,7 @@ class Cameraman:  # user class
 
             if self.can_move:
                 if pyxel.btn(pyxel.KEY_RIGHT):
-                    if self.x < 184:
+                    if self.x < 192:
                         if not self.sides_positions_right.intersection(self.blocks_positions[1]):
                             self.in_move = True
                             self.w = 8
@@ -471,10 +484,10 @@ class Cameraman:  # user class
                     self.onground = False
                     self.in_jump = True
 
-            if pyxel.btn(pyxel.KEY_DOWN):
-                self.y = 0
-                self.x = 0
-                self.update_positions()
+            # if pyxel.btn(pyxel.KEY_DOWN):
+            #     self.y = 0
+            #     self.x = 0
+            #     self.update_positions()
 
             if pyxel.btn(pyxel.KEY_SPACE):
                 if not self.punch:
@@ -529,8 +542,13 @@ class Cameraman:  # user class
 
                 else:
                     pyxel.play(2, 4)
-                self.x -= self.w // 8 * 20
-                self.y -= 3
+                if self.onground:
+                    self.x -= self.w // 8 * 10
+                    self.y -= 10
+                else:
+                    self.x -= self.w // 8 * 20
+                    self.y -= 10
+
                 self.immortal = True
                 self.immortal_timer = 50
 
@@ -546,9 +564,9 @@ class Cameraman:  # user class
     def get_punch_positions(self):
         if self.punch:
             if self.w > 0:
-                result = {(x, self.y + 4) for x in range(self.x + 8, self.x + 8 * 4)}
+                result = {(x, self.y + 4) for x in range(self.x + 8, self.x + 16)}
             else:
-                result = {(x, self.y + 4) for x in range(self.x - 8 * 3, self.x)}
+                result = {(x, self.y + 4) for x in range(self.x - 8, self.x)}
         else:
             result = set()
 
@@ -579,29 +597,52 @@ class Cameraman:  # user class
 
 
 class Button:  # buttons class (with mouse)
-    def __init__(self, x, y, w, h, animation, action):
+    def __init__(self, x, y, w, h, animation, animation_targeted, action):
         self.x = x
         self.y = y
         self.w = w
         self.h = h
         self.x_anim = animation[0]
         self.y_anim = animation[1]
+        self.x_anim_targ = animation_targeted[0]
+        self.y_anim_targ = animation_targeted[1]
+        self.targeted = False
         self.function = action
 
     def draw(self):
-        pyxel.blt(self.x, self.y, 0, self.x_anim, self.y_anim, self.w, self.h, 0)
+        if not self.targeted:
+            pyxel.blt(self.x, self.y, 0, self.x_anim, self.y_anim, self.w, self.h, 0)
+        else:
+            pyxel.blt(self.x, self.y, 0, self.x_anim_targ, self.y_anim_targ, self.w,
+                      self.h, 0)
 
-    def is_clicked(self, x, y):  # check if was clicked
-        if self.x <= x <= self.x + self.w and self.y <= y <= self.y + self.h:
-            self.function()
+    # def is_clicked(self, x, y):  # check if was clicked
+    #     if self.x <= x <= self.x + self.w and self.y <= y <= self.y + self.h:
+    #         self.function()
+
+    def event(self):
+        self.function()
+
+
+class Level:  # level class
+    def __init__(self, hero: Cameraman, hero_pos: tuple,
+                 enemies_controll: EnemiesControl,
+                 contructor: Constructor, background, musik):
+        self.blocks = contructor
+        self.enemies = enemies_controll
+        self.hero = hero
+        self.hero.x, self.hero.y = hero_pos
+
+    def draw(self):
+        ...
 
 
 class App:  # game class
     def __init__(self):
-        pyxel.init(192, 120, title='Skibidi battle', fps=60)
-        pyxel.mouse(True)
+        pyxel.init(200, 120, title='Skibidi battle', fps=120)
+        # pyxel.mouse(True)
         pyxel.load('assets/resources.pyxres')
-        pyxel.playm(0, loop=True)
+        # pyxel.playm(0, loop=True)
         self.blocks_controler = Constructor()
         self.hero_positions = [8, 104]
         self.flash_pos = [[], [None, ]]  # ((x, y), (direction))
@@ -610,7 +651,7 @@ class App:  # game class
         self.enemies = EnemiesControl(self.blocks_controler.positions,
                                        self.hero_positions, self.flash_pos)
 
-        self.hero = Cameraman(8, 104, self.blocks_controler.positions,
+        self.hero = Cameraman(8, 84, self.blocks_controler.positions,
                               self.blocks_controler.inside_positions,
                               self.enemies)
         self.start_menu = True
@@ -618,28 +659,82 @@ class App:  # game class
         self.in_pause = False
         self.dead = False
         self.music = True
-        self.start_button = Button(87, 60, 16, 16, (88, 0), self.play)
-        self.pause_button = Button(176, 0, 16, 16, (72, 0), self.pause)
-        self.reset_button = Button(87, 78, 16, 16, (104, 0), self.reset)
+
+        self.counter_choose = -1
+
+        self.start_button = Button(67, 30, 67, 16, (0, 32), (0, 48),  self.play)
+
+        # TODO add continue button in pause
+        # TODO change action argument to self.back_to_main
+        self.back_to_main_menu_button = Button(67, 30, 67, 16, (0, 128), (0, 144),
+                                               self.play)
+        self.exit_button = Button(67, 48, 67, 16, (0, 64), (0, 80), self.exit)
+        self.reset_button = Button(67, 66, 67, 16, (0, 96), (0, 112), self.reset)
+        self.start_buttons = (self.start_button, self.exit_button)
+        self.in_pause_buttons = (self.back_to_main_menu_button, self.exit_button, self.reset_button)
 
         pyxel.run(self.update, self.draw)
 
+    def button_update(self, buttons):
+        for button in buttons:
+            button.targeted = False
+
+        buttons[self.counter_choose].targeted = True
+
     def update(self):
+        if self.in_pause or self.start_menu:
+            if pyxel.btnp(pyxel.KEY_RETURN):
+                if self.in_pause:
+                    self.in_pause_buttons[self.counter_choose].event()
 
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+                else:
+                    self.start_buttons[self.counter_choose].event()
+                self.counter_choose = -1
 
-            mx = pyxel.mouse_x
-            my = pyxel.mouse_y
+            if pyxel.btnp(pyxel.KEY_UP):
+                pyxel.play(2, 9)
+                if self.start_menu:
 
-            if self.in_game:
-                self.pause_button.is_clicked(mx, my)
+                    if len(self.start_buttons) * -1 > self.counter_choose - 1:
+                        self.counter_choose = 1
+                    else:
+                        self.counter_choose -= 1
 
-            elif self.start_menu:
-                self.start_button.is_clicked(mx, my)
+                    self.button_update(self.start_buttons)
+                else:
+                    if len(self.in_pause_buttons) * -1 > self.counter_choose - 1:
+                        self.counter_choose = 1
+                    else:
+                        self.counter_choose -= 1
 
-            elif self.in_pause:
-                self.start_button.is_clicked(mx, my)
-                self.reset_button.is_clicked(mx, my)
+                    self.button_update(self.in_pause_buttons)
+
+            elif pyxel.btnp(pyxel.KEY_DOWN):
+                pyxel.play(2, 9)
+                if self.start_menu:
+                    if len(self.start_buttons) - 1 < self.counter_choose + 1:
+                        self.counter_choose = 0
+                    else:
+                        self.counter_choose += 1
+                    self.button_update(self.start_buttons)
+                else:
+                    if len(self.in_pause_buttons) - 1 < self.counter_choose + 1:
+                        self.counter_choose = 0
+                    else:
+                        self.counter_choose += 1
+                    self.button_update(self.in_pause_buttons)
+
+        # if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        #
+        #     mx = pyxel.mouse_x
+        #     my = pyxel.mouse_y
+        #
+        #     if self.start_menu:
+        #         self.start_button.is_clicked(mx, my)
+        #
+        #     elif self.in_pause:
+        #         self.start_button.is_clicked(mx, my)
+        #         self.reset_button.is_clicked(mx, my)
 
         if pyxel.btnp(pyxel.KEY_M):
             if self.music:
@@ -648,6 +743,17 @@ class App:  # game class
             else:
                 self.music = True
                 pyxel.playm(0, loop=True)
+
+        if pyxel.btnp(pyxel.KEY_N):
+
+            if not self.start_menu:
+                if self.in_pause:
+                    self.in_pause = False
+                    self.in_game = True
+
+                else:
+                    self.in_game = False
+                    self.in_pause = True
 
         self.hero_positions[0] = self.hero.x
         self.hero_positions[1] = self.hero.y
@@ -660,15 +766,16 @@ class App:  # game class
         self.enemies.punch_control(self.hero.get_punch_positions())
         self.enemies.positions()
 
-    def pause(self):
+    def exit(self):
+        ...
 
-        self.in_pause = True
-        self.in_game = False
-        self.start_menu = False
+    def back_to_menu(self):
+        ...
 
     def play(self):
         self.in_game = True
         self.in_pause = False
+        self.start_menu = False
 
     def reset(self):
         print(111)
@@ -677,28 +784,28 @@ class App:  # game class
         self.hero.draw()
         self.blocks_controler.draw()
         self.enemies.draw()
-        self.pause_button.draw()
 
     def draw_pause(self):
-
-        pyxel.text(85, 10, "Pause", 7)
-        self.start_button.draw()
+        self.back_to_main_menu_button.draw()
+        self.exit_button.draw()
         self.reset_button.draw()
 
     def draw_start_menu(self):
-        pyxel.text(85, 10, "Play", 7)
         self.start_button.draw()
+        self.exit_button.draw()
 
     def draw(self):
-        pyxel.blt(0, 0, 0, 0, 16, 400, 200)
 
         if self.in_game:
+            pyxel.bltm(0, 0, 0, 0, 0, 200, 120)
             self.draw_in_game()
 
         elif self.start_menu:
+            pyxel.bltm(0, 0, 1, 0, 0, 200, 120)
             self.draw_start_menu()
 
         elif self.in_pause:
+            pyxel.bltm(0, 0, 1, 0, 0, 200, 120)
             self.draw_pause()
 
 
