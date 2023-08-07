@@ -99,7 +99,7 @@ class ToiletEnemy:  # default toilet enemy class
         self.w = 8
         self.h = 8
         self.animation_count = 0
-        self.flashed_timer = 30
+        self.flashed_timer = 80
         self.deth_timer = 80
         self.targeted = False
         self.alive = True
@@ -149,15 +149,15 @@ class ToiletEnemy:  # default toilet enemy class
         else:
             self.all_positions = set()
 
-        self.__flashed_update()
+            self.__flashed_update()
 
     def __flashed_update(self):
         if self.flashed:
             if self.flashed_timer > 0:
-                self.flashed_timer -= 0.5
+                self.flashed_timer -= 1
             else:
                 self.flashed = False
-                self.flashed_timer = 30
+                self.flashed_timer = 80
 
     def __move(self):
         if self.direction_rigth:
@@ -238,10 +238,10 @@ class EnemiesControl:  # aggregator of toilets/enemies
         self.positions()
 
     def __setup_enemies(self):
-        # toilet1 = ToiletEnemy(150, 74, self.blocks, self.hero)
+        toilet1 = ToiletEnemy(10, 104, self.blocks, self.hero)
         toilet2 = ToiletEnemy(150, 104, self.blocks, self.hero)
-        # toilet3 = ToiletEnemy(20, 84, self.blocks, self.hero)
-        result = (toilet2, )
+        toilet3 = ToiletEnemy(180, 104, self.blocks, self.hero)
+        result = (toilet1, toilet2, toilet3)
         return result
 
     def draw(self):
@@ -396,8 +396,8 @@ class Cameraman:  # user class
 
         if not self.camera_flash:
             if self.flash_timer != 0:
-                self.flash_timer -= 0.5
-                if self.flash_timer < 100:
+                self.flash_timer -= 1
+                if self.flash_timer < 148:
                     self.light_pos = ((), ())
             else:
                 self.camera_flash = True
@@ -621,13 +621,13 @@ class Button:  # buttons class (with mouse)
     #         self.function()
 
     def event(self):
-        self.function()
+        self.function(self)
 
 
 class Level:  # level class
     def __init__(self, hero: Cameraman, hero_pos: tuple,
                  enemies_controll: EnemiesControl,
-                 contructor: Constructor, background, musik):
+                 contructor=Constructor(), background=..., musik=...):
         self.blocks = contructor
         self.enemies = enemies_controll
         self.hero = hero
@@ -643,8 +643,10 @@ class App:  # game class
         # pyxel.mouse(True)
         pyxel.load('assets/resources.pyxres')
         # pyxel.playm(0, loop=True)
+        # self.levels = (Level(),)
+        self.choosed_level = 0
         self.blocks_controler = Constructor()
-        self.hero_positions = [8, 104]
+        self.hero_positions = [8, 84]
         self.flash_pos = [[], [None, ]]  # ((x, y), (direction))
         self.punch_pos = set()
 
@@ -664,14 +666,17 @@ class App:  # game class
 
         self.start_button = Button(67, 30, 67, 16, (0, 32), (0, 48),  self.play)
 
-        # TODO add continue button in pause
-        # TODO change action argument to self.back_to_main
         self.back_to_main_menu_button = Button(67, 30, 67, 16, (0, 128), (0, 144),
-                                               self.play)
+                                               self.back_to_menu)
         self.exit_button = Button(67, 48, 67, 16, (0, 64), (0, 80), self.exit)
         self.reset_button = Button(67, 66, 67, 16, (0, 96), (0, 112), self.reset)
+
         self.start_buttons = (self.start_button, self.exit_button)
-        self.in_pause_buttons = (self.back_to_main_menu_button, self.exit_button, self.reset_button)
+        self.in_pause_buttons = (self.start_button,
+                                 self.back_to_main_menu_button,
+                                 self.exit_button, self.reset_button)
+        self.dead_buttons = (self.back_to_main_menu_button, self.exit_button,
+                             self.reset_button)
 
         pyxel.run(self.update, self.draw)
 
@@ -681,48 +686,59 @@ class App:  # game class
 
         buttons[self.counter_choose].targeted = True
 
+    def control_menu_keys(self, buttons, key_up=True):
+        if key_up:
+            if len(buttons) * -1 > self.counter_choose - 1:
+                self.counter_choose = -1
+            else:
+                self.counter_choose -= 1
+
+        else:
+            if len(buttons) - 1 < self.counter_choose + 1:
+                self.counter_choose = 0
+            else:
+                self.counter_choose += 1
+
+        self.button_update(buttons)
+
     def update(self):
-        if self.in_pause or self.start_menu:
+        if not self.in_game:
             if pyxel.btnp(pyxel.KEY_RETURN):
                 if self.in_pause:
                     self.in_pause_buttons[self.counter_choose].event()
 
-                else:
+                elif self.start_menu:
                     self.start_buttons[self.counter_choose].event()
-                self.counter_choose = -1
+
+                else:
+                    self.dead_buttons[self.counter_choose].event()
 
             if pyxel.btnp(pyxel.KEY_UP):
                 pyxel.play(2, 9)
                 if self.start_menu:
+                    self.control_menu_keys(self.start_buttons)
+                # if self.start_menu:
+                #
+                #     if len(self.start_buttons) * -1 > self.counter_choose - 1:
+                #         self.counter_choose = 1
+                #     else:
+                #         self.counter_choose -= 1
+                #
+                #     self.button_update(self.start_buttons)
+                elif self.in_pause:
+                    self.control_menu_keys(self.in_pause_buttons)
 
-                    if len(self.start_buttons) * -1 > self.counter_choose - 1:
-                        self.counter_choose = 1
-                    else:
-                        self.counter_choose -= 1
-
-                    self.button_update(self.start_buttons)
                 else:
-                    if len(self.in_pause_buttons) * -1 > self.counter_choose - 1:
-                        self.counter_choose = 1
-                    else:
-                        self.counter_choose -= 1
-
-                    self.button_update(self.in_pause_buttons)
+                    self.control_menu_keys(self.dead_buttons)
 
             elif pyxel.btnp(pyxel.KEY_DOWN):
                 pyxel.play(2, 9)
                 if self.start_menu:
-                    if len(self.start_buttons) - 1 < self.counter_choose + 1:
-                        self.counter_choose = 0
-                    else:
-                        self.counter_choose += 1
-                    self.button_update(self.start_buttons)
+                    self.control_menu_keys(self.start_buttons, False)
+                elif self.in_pause:
+                    self.control_menu_keys(self.in_pause_buttons, False)
                 else:
-                    if len(self.in_pause_buttons) - 1 < self.counter_choose + 1:
-                        self.counter_choose = 0
-                    else:
-                        self.counter_choose += 1
-                    self.button_update(self.in_pause_buttons)
+                    self.control_menu_keys(self.dead_buttons, False)
 
         # if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
         #
@@ -746,14 +762,19 @@ class App:  # game class
 
         if pyxel.btnp(pyxel.KEY_N):
 
-            if not self.start_menu:
+            if not self.start_menu and not self.dead:
                 if self.in_pause:
                     self.in_pause = False
                     self.in_game = True
 
                 else:
+                    self.counter_choose = -5
                     self.in_game = False
                     self.in_pause = True
+
+        if not self.hero.alive:
+            self.dead = True
+            self.in_game = False
 
         self.hero_positions[0] = self.hero.x
         self.hero_positions[1] = self.hero.y
@@ -766,18 +787,26 @@ class App:  # game class
         self.enemies.punch_control(self.hero.get_punch_positions())
         self.enemies.positions()
 
-    def exit(self):
-        ...
+    def exit(self, btn):
+        pyxel.quit()
 
-    def back_to_menu(self):
-        ...
+    def back_to_menu(self, btn):
+        self.in_pause = False
+        self.start_menu = True
+        self.counter_choose = -1
+        btn.targeted = False
+        if self.dead:
+            self.hero.alive = True
+            self.dead = False
 
-    def play(self):
+    def play(self, btn):
         self.in_game = True
         self.in_pause = False
         self.start_menu = False
+        self.counter_choose = 0
+        btn.targeted = False
 
-    def reset(self):
+    def reset(self, btn):
         print(111)
 
     def draw_in_game(self):
@@ -786,6 +815,13 @@ class App:  # game class
         self.enemies.draw()
 
     def draw_pause(self):
+        self.start_button.y = 12
+        self.start_button.draw()
+        self.back_to_main_menu_button.draw()
+        self.exit_button.draw()
+        self.reset_button.draw()
+
+    def draw_dead(self):
         self.back_to_main_menu_button.draw()
         self.exit_button.draw()
         self.reset_button.draw()
@@ -793,12 +829,17 @@ class App:  # game class
     def draw_start_menu(self):
         self.start_button.draw()
         self.exit_button.draw()
+        self.start_button.y = 30
 
     def draw(self):
 
         if self.in_game:
             pyxel.bltm(0, 0, 0, 0, 0, 200, 120)
             self.draw_in_game()
+
+        elif self.dead:
+            pyxel.bltm(0, 0, 1, 0, 0, 200, 120)
+            self.draw_dead()
 
         elif self.start_menu:
             pyxel.bltm(0, 0, 1, 0, 0, 200, 120)
