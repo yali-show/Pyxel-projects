@@ -105,11 +105,11 @@ class ToiletEnemy:  # default toilet enemy class
         self.damaged = False
         self.all_positions = {(x, y)
                               for x in range(self.x, self.x + 8)
-                              for y in range(self.y - 1, self.y + 9)}
+                              for y in range(self.y, self.y + 9)}
         self.all_positions_flashed = self.all_positions
         self.direction_rigth = dir_rigth
 
-    def __animate(self):
+    def animate(self):
         if self.animation_count >= 20:
             self.animation_count = 0
 
@@ -120,16 +120,16 @@ class ToiletEnemy:  # default toilet enemy class
                           self.animation[self.animation_count // 5][0],
                           self.animation[self.animation_count // 5][1],
                           self.w, self.h, 0)
-                self.__move()
+                self.move()
             else:
                 self.targeted = False
                 pyxel.blt(self.x, self.y, 0,
                           self.flashed_animation[self.animation_count // 5][0],
                           self.flashed_animation[self.animation_count // 5][1],
                           self.w, self.h, 0)
-                self.__update_pos()
+                self.update_pos()
         else:
-            self.__update_pos()
+            self.update_pos()
             if self.deth_timer > 0:
                 pyxel.blt(self.x, self.y, 0,
                           24,
@@ -137,7 +137,7 @@ class ToiletEnemy:  # default toilet enemy class
                           self.w, self.h, 0)
             self.deth_timer -= 1
 
-    def __update_pos(self):
+    def update_pos(self):
         if not self.flashed and self.alive:
             self.all_positions = {(x, y)
                                   for x in range(self.x, self.x + 8)
@@ -157,7 +157,7 @@ class ToiletEnemy:  # default toilet enemy class
                 self.flashed = False
                 self.flashed_timer = 80
 
-    def __move(self):
+    def move(self):
         if self.direction_rigth:
             bottom_side_pos = (self.x + 8, self.y + 8)
             side_pos = (self.x + 8, self.y + 4)
@@ -185,7 +185,7 @@ class ToiletEnemy:  # default toilet enemy class
                 self.direction_rigth = True
                 self.w = 8
                 self.targeted = False
-        self.__update_pos()
+        self.update_pos()
 
     def __attack(self):  # attack user if was seen
         if self.direction_rigth is False:
@@ -223,7 +223,75 @@ class ToiletEnemy:  # default toilet enemy class
                     pyxel.play(2, 6)
 
     def draw(self):
-        self.__animate()
+        self.animate()
+
+
+class SmallToilet(ToiletEnemy):
+    def __init__(self, x, y, blocks_pos, hero, dir_rigth=True):
+        super().__init__(x, y, blocks_pos, hero, dir_rigth)
+        self.animation = ((48, 19), (56, 19), (56, 19), (48, 27), (48, 19))
+        # self.flashed_animation = ((32, 0), (24, 0), (24, 0), (24, 0), (32, 0))
+        # self.deth_animation = ((24, 0), (24, 0), (24, 0), (32, 8), (24, 0))
+        self.w = 5
+        self.h = 5
+        self.all_positions = {(x, y)
+                              for x in range(self.x, self.x + 4)
+                              for y in range(self.y, self.y + 6)}
+
+    def animate(self):
+        if self.animation_count >= 20:
+            self.animation_count = 0
+
+        if self.alive:
+            self.animation_count += 1
+            pyxel.blt(self.x, self.y, 0,
+                      self.animation[self.animation_count // 5][0],
+                      self.animation[self.animation_count // 5][1],
+                      self.w, self.h, 0)
+            self.move()
+
+        else:
+            self.update_pos()
+            if self.deth_timer > 0:
+                pyxel.blt(self.x, self.y, 0,
+                          24,
+                          0,
+                          self.w, self.h, 0)
+            self.deth_timer -= 1
+
+    def move(self):
+        if self.direction_rigth:
+            bottom_side_pos = (self.x + 5, self.y + 5)
+            side_pos = (self.x + 5, self.y + 2)
+            if bottom_side_pos in self.positions[0]\
+                    and side_pos not in self.positions[1]:
+                self.x += 1
+
+            else:
+                self.direction_rigth = False
+                self.w = -4
+
+        else:
+            bottom_side_pos = (self.x, self.y + 5)
+            side_pos = (self.x, self.y + 2)
+            self.w = -5
+            if bottom_side_pos in self.positions[0]\
+                    and side_pos not in self.positions[1]:
+                self.x -= 1
+            else:
+                self.direction_rigth = True
+                self.w = 5
+        self.update_pos()
+
+    def update_pos(self):
+        if not self.flashed and self.alive:
+            self.all_positions = {(x, y)
+                                  for x in range(self.x, self.x + 4)
+                                  for y in range(self.y, self.y + 6)}
+            # self.all_positions_flashed = self.all_positions
+            # self.__attack()
+        else:
+            self.all_positions = set()
 
 
 class EnemiesControl:  # aggregator of toilets/enemies
@@ -244,7 +312,9 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
         if self.toilet_pos:
             for pos in self.toilet_pos:
-                result.append(ToiletEnemy(*pos, self.blocks, self.hero, False))
+                result.append(ToiletEnemy(*pos, self.blocks, self.hero))
+
+        result.append(SmallToilet(100, 107, self.blocks, self.hero))
 
         return result
 
@@ -655,7 +725,7 @@ class App:  # game class
         pyxel.load('assets/resources.pyxres')
         pyxel.image(2).load(0, -16, 'assets/6682da62-dbd1-4c52-ba0c-4c95bf00264b.png')
         # pyxel.playm(0, loop=True)
-        level1 = Level([8, 84], [[10, 104], [150, 104], [180, 104]],
+        level1 = Level([8, 84], [[150, 104], [180, 104]],
                              [(0, 112), (8, 112), (16, 112), (24, 112),
                               (32, 112), (40, 112), (48, 112), (56, 112),
                               (64, 112), (72, 112), (80, 112), (88, 112),
@@ -672,7 +742,7 @@ class App:  # game class
                               (96, 112), (104, 112), (112, 112), (120, 112),
                               (128, 112), (136, 112), (144, 112), (152, 112),
                               (160, 112), (168, 112), (176, 112), (184, 112),
-                              (192, 112)], (32,8))
+                              (192, 112), (20, 104)], (32,8))
         self.levels = [level1, level2]
 
         self.choosed_level = 1
@@ -841,14 +911,14 @@ class App:  # game class
                             (192, 112), (0, 92), (8, 92), (16, 92), (24, 92),
                             (32, 92), (40, 92), (48, 92), (56, 92), (64, 92),
                             (72, 92)])
-            level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
+            level2 = Level([8, 10], [],
                            [(0, 112), (8, 112), (16, 112), (24, 112),
                             (32, 112), (40, 112), (48, 112), (56, 112),
                             (64, 112), (72, 112), (80, 112), (88, 112),
                             (96, 112), (104, 112), (112, 112), (120, 112),
                             (128, 112), (136, 112), (144, 112), (152, 112),
                             (160, 112), (168, 112), (176, 112), (184, 112),
-                            (192, 112)], (72, 8))
+                            (192, 112), (40, 104)], (72, 8))
 
             self.levels = [level1, level2]
             self.flash_pos = self.levels[
