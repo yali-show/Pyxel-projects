@@ -101,7 +101,9 @@ class ToiletEnemy:  # default toilet enemy class
         self.animation_count = 0
         self.flashed_timer = 80
         self.deth_timer = 80
+
         self.score = 10
+        self.scored = False
         self.damaged_music = (2, 6)
         self.targeted = False
         self.alive = True
@@ -133,6 +135,7 @@ class ToiletEnemy:  # default toilet enemy class
                           self.w, self.h, 0)
                 self.update_pos()
         else:
+
             self.update_pos()
             if self.deth_timer > 0:
                 pyxel.blt(self.x, self.y, 0,
@@ -141,8 +144,8 @@ class ToiletEnemy:  # default toilet enemy class
                           self.w, self.h, 0)
             elif self.deth_timer == 0:
                 pyxel.play(2, 12)
-            elif self.deth_timer > -30:
 
+            elif self.deth_timer > -30:
                 self.animation_count += 1
                 pyxel.blt(self.x - self.w/2, self.y, 0,
                           self.points_anim[self.animation_count // 5][0],
@@ -424,6 +427,7 @@ class EnemiesControl:  # aggregator of toilets/enemies
         self.hero = hero_pos
         self.toilet_pos = toilet_pos
         self.light_pos = flash_pos
+        self.score = 0
         self.punch_pos = set()
         self.hero_dir_right = hero_direction
         self.toilets = self.__setup_enemies()
@@ -493,10 +497,14 @@ class EnemiesControl:  # aggregator of toilets/enemies
             right_direction = None
 
         for toilet in self.toilets:
-            result.update(toilet.all_positions)
+            if toilet.alive:
+                result.update(toilet.all_positions)
 
-            self.__flash_control(toilet, light_positions, right_direction)
-
+                self.__flash_control(toilet, light_positions, right_direction)
+            else:
+                if not toilet.scored:
+                    self.score += toilet.score
+                    toilet.scored = True
         self.all_positions = result
 
 
@@ -510,7 +518,6 @@ class Cameraman:  # user class
         # data of character
         self.x = x
         self.y = y
-        self.score = 0
         self.health = 3
         self.onground = True
         self.in_jump = False
@@ -825,7 +832,7 @@ class Button:  # buttons class (with mouse)
 class Level:  # level class
     def __init__(self, hero_pos: list, enemies_pos: list, contructor_pos: list,
                  texture=(24, 8), background=None, music=None):
-
+        self.score = ScoreBoard()
         self.flash_pos = [[], [None, ]]
         self.hero_pos = hero_pos
 
@@ -840,6 +847,7 @@ class Level:  # level class
         self.music_track = music
 
     def draw(self):
+        # print(self.enemies.score)
         if self.tilemap:
             pyxel.bltm(self.tilemap[0], self.tilemap[1], self.tilemap[2], 0, 0,
                        200, 120)
@@ -847,12 +855,18 @@ class Level:  # level class
             pyxel.blt(0, 0, 2, 0, 0, 200, 120)
 
 
+class ScoreBoard:
+    def draw(self, score):
+        pyxel.text(150, 1, f'score: {score}', 7)
+
+
 class App:  # game class
     def __init__(self):
         pyxel.init(200, 120, title='Skibidi battle', fps=120)
         # pyxel.mouse(True)
         pyxel.load('assets/resources.pyxres')
-        pyxel.image(2).load(0, -16, 'assets/6682da62-dbd1-4c52-ba0c-4c95bf00264b.png')
+        pyxel.image(2).load(0, -16,
+                            'assets/6682da62-dbd1-4c52-ba0c-4c95bf00264b.png')
         # pyxel.playm(0, loop=True)
         level1 = Level([8, 84], [[150, 104], [180, 104]],
                              [(0, 112), (8, 112), (16, 112), (24, 112),
@@ -871,23 +885,19 @@ class App:  # game class
                               (96, 112), (104, 112), (112, 112), (120, 112),
                               (128, 112), (136, 112), (144, 112), (152, 112),
                               (160, 112), (168, 112), (176, 112), (184, 112),
-                              (192, 112), (20, 104)], (32,8))
+                              (192, 112), (20, 104)], (32, 8))
         self.levels = [level1, level2]
 
-        self.choosed_level = 1
+        self.choosed_level = 0
+        self.score_controll = self.levels[self.choosed_level].score
         self.flash_pos = self.levels[self.choosed_level].flash_pos  # ((x, y), (direction))
         self.hero_positions = self.levels[self.choosed_level].hero_pos  # (x, y)
         self.blocks_controller = self.levels[self.choosed_level].blocks
         self.hero = self.levels[self.choosed_level].hero
 
         self.enemies = self.levels[self.choosed_level].enemies
-        # self.enemies = EnemiesControl(self.blocks_controller.positions,
-        #                               self.hero_positions, self.flash_pos)
         self.punch_pos = set()
 
-        # self.hero = Cameraman(8, 84, self.blocks_controller.positions,
-        #                       self.blocks_controller.inside_positions,
-        #                       self.enemies)
         self.start_menu = True
         self.in_game = False
         self.in_pause = False
@@ -1013,6 +1023,22 @@ class App:  # game class
         self.flash_pos[0], self.flash_pos[1] = self.hero.light_pos[0], self.hero.light_pos[1]
         self.__enemies_updates()
 
+        # switch level (need in refactor)
+        # if self.enemies.score > 10:
+        #     self.choosed_level += 1
+        #     self.score_controll = self.levels[self.choosed_level].score
+        #     self.flash_pos = self.levels[
+        #         self.choosed_level].flash_pos  # ((x, y), (direction))
+        #     self.hero_positions = self.levels[
+        #         self.choosed_level].hero_pos  # (x, y)
+        #     self.blocks_controller = self.levels[self.choosed_level].blocks
+        #     self.hero = self.levels[self.choosed_level].hero
+        #
+        #     self.enemies = self.levels[self.choosed_level].enemies
+        #     self.score = self.enemies.score
+        #     self.punch_pos = set()
+
+
     def __enemies_updates(self):
         self.enemies.hero_dir_right = False if self.hero.w > 0 else True
         self.enemies.punch_control(self.hero.get_punch_positions())
@@ -1038,7 +1064,7 @@ class App:  # game class
         btn.targeted = False
 
     def play(self, btn):
-        level1 = Level([8, 84], [[10, 104], [150, 104], [180, 104]],
+        level1 = Level([8, 84], [[150, 104], [180, 104]],
                        [(0, 112), (8, 112), (16, 112), (24, 112),
                         (32, 112), (40, 112), (48, 112), (56, 112),
                         (64, 112), (72, 112), (80, 112), (88, 112),
@@ -1048,7 +1074,7 @@ class App:  # game class
                         (192, 112), (0, 92), (8, 92), (16, 92), (24, 92),
                         (32, 92), (40, 92), (48, 92), (56, 92), (64, 92),
                         (72, 92)])
-        level2 = Level([8, 10], [],
+        level2 = Level([8, 10], [[150, 104], [180, 104]],
                        [(0, 112), (8, 112), (16, 112), (24, 112),
                         (32, 112), (40, 112), (48, 112), (56, 112),
                         (64, 112), (72, 112), (80, 112), (88, 112),
@@ -1072,7 +1098,7 @@ class App:  # game class
         btn.targeted = False
 
     def reset(self, btn):
-        level1 = Level([8, 84], [[10, 104], [150, 104], [180, 104]],
+        level1 = Level([8, 84], [[150, 104], [180, 104]],
                        [(0, 112), (8, 112), (16, 112), (24, 112),
                         (32, 112), (40, 112), (48, 112), (56, 112),
                         (64, 112), (72, 112), (80, 112), (88, 112),
@@ -1111,6 +1137,7 @@ class App:  # game class
         self.hero.draw()
         self.blocks_controller.draw()
         self.enemies.draw()
+        self.score_controll.draw(self.enemies.score)
 
     def draw_pause(self):
         self.continue_button.draw()
