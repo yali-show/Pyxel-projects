@@ -31,12 +31,12 @@ class Block:  # blocks and barier class
 
 
 class Constructor:  # aggregator of blocks objects
-    def __init__(self, blocks_pos, texture):
+    def __init__(self, blocks_pos):
         self.blocks_pos = blocks_pos
-        self.texture = texture
-        self.blocks = self.__create_platform()
+        # self.texture = texture
+        self.blocks, self.dangerous_blocks = self.__create_platform()
         self.positions = self.__col_positions()
-        self.inside_positions = self.__inside_pos()
+        self.inside_positions, self.dangerous_inside_positions = self.__inside_pos()
 
     def __create_platform(self):
         """
@@ -45,15 +45,17 @@ class Constructor:  # aggregator of blocks objects
         """
 
         blocks = set()
+        dangerous_blocks = set()
 
         if self.blocks_pos is not None:
-            for pos in self.blocks_pos:
-                blocks.add(Block(*pos, self.texture))
+            for blocks_setup in self.blocks_pos:
 
-        # for i in range(25):
-        #     blocks.add(Block(i * 8, 112))
+                block = Block(*blocks_setup)
+                blocks.add(block)
+                if block.dangerous:
+                    dangerous_blocks.add(block)
 
-        return blocks
+        return blocks, dangerous_blocks
 
     def __col_positions(self):
         """
@@ -76,10 +78,14 @@ class Constructor:  # aggregator of blocks objects
         """
         :return: set of positions inside blocks
         """
-        result = set()
+        block_inside, dangerous_inside = set(), set()
         for block in self.blocks:
-            result.update(block.inside_pos)
-        return result
+            block_inside.update(block.inside_pos)
+
+        for block in self.dangerous_blocks:
+            dangerous_inside.update(block.inside_pos)
+
+        return block_inside, dangerous_inside
 
     def draw(self):
         for block in self.blocks:
@@ -509,10 +515,14 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
 
 class Cameraman:  # user class
-    def __init__(self, x, y, blocks_pos, inside_blocks_pos, enemies):
+    def __init__(self, x, y, blocks_pos, inside_blocks_pos,
+                 dangerous_blocks_pos, inside_dangerous_blocks_pos, enemies):
         # tuple of sets of coordinates of all blocks
         self.blocks_positions = blocks_pos
         self.inside_blocks_pos = inside_blocks_pos
+        self.dangerous_blocks_pos = dangerous_blocks_pos
+        self.inside_dangerous_blocks_pos = inside_dangerous_blocks_pos
+
         self.enemies = enemies
 
         # data of character
@@ -618,6 +628,9 @@ class Cameraman:  # user class
         if self.alive:
             self.__falling_check()
             self.__get_damaged()
+
+            # TODO make dangerous blocks check
+            # if self.bottom_positions.intersection(self.dangerous_blocks_pos[0]):
 
             if not self.bottom_positions.intersection(self.blocks_positions[0]):
                 self.onground = False
@@ -831,28 +844,57 @@ class Button:  # buttons class (with mouse)
 
 class Level:  # level class
     def __init__(self, hero_pos: list, enemies_pos: list, contructor_pos: list,
-                 texture=(24, 8), background=None, music=None):
+                 background=None, music=None):
         self.score = ScoreBoard()
         self.flash_pos = [[], [None, ]]
         self.hero_pos = hero_pos
-
-        self.blocks = Constructor(contructor_pos, texture)
+        self.blocks = Constructor(contructor_pos)
         self.enemies = EnemiesControl(self.blocks.positions, self.hero_pos,
                                       self.flash_pos, enemies_pos)
         self.hero = Cameraman(x=hero_pos[0], y=hero_pos[1],
                               blocks_pos=self.blocks.positions,
                               inside_blocks_pos=self.blocks.inside_positions,
-                              enemies=self.enemies)
+                              enemies=self.enemies,
+                              dangerous_blocks_pos=self.blocks.dangerous_blocks,
+                              inside_dangerous_blocks_pos=self.blocks.dangerous_inside_positions)
+
         self.tilemap = background
         self.music_track = music
 
     def draw(self):
-        # print(self.enemies.score)
         if self.tilemap:
             pyxel.bltm(self.tilemap[0], self.tilemap[1], self.tilemap[2], 0, 0,
                        200, 120)
         else:
             pyxel.blt(0, 0, 2, 0, 0, 200, 120)
+
+
+class KeyDoor:
+    def __init__(self, level_num: int, positions: tuple, sprites: tuple):
+        self.level = level_num
+        self.key_sprite = sprites[0]
+        self.door_sprite = sprites[0]
+        self.key_pos = positions[0]   # key pos (x, y)
+        self.door_pos = positions[1]  # door pos (x, y)
+        self.all_key_pos = {(x, y)
+                            for x in range(self.key_pos[0], self.key_pos[0] + 5)
+                            for y in range(self.key_pos[1], self.key_pos[1] + 5)}
+
+        self.all_door_pos = {(x, y)
+                            for x in range(self.door_pos[0], self.door_pos[0] + 5)
+                            for y in range(self.door_pos[1], self.door_pos[1] + 5)}
+
+        self.activated = False
+        self.key_touched = False
+
+    def update_key(self):
+        pass
+
+    def draw(self):
+        if self.activated and not self.key_touched:
+            pyxel.blt(*self.key_pos, 0, *self.key_sprite, 5, 5, 0)
+
+        pyxel.blt(*self.door_pos, 0, *self.door_sprite, 8, 8, 0)
 
 
 class ScoreBoard:
@@ -869,23 +911,38 @@ class App:  # game class
                             'assets/6682da62-dbd1-4c52-ba0c-4c95bf00264b.png')
         # pyxel.playm(0, loop=True)
         level1 = Level([8, 84], [[150, 104], [180, 104]],
-                             [(0, 112), (8, 112), (16, 112), (24, 112),
-                              (32, 112), (40, 112), (48, 112), (56, 112),
-                              (64, 112), (72, 112), (80, 112), (88, 112),
-                              (96, 112), (104, 112), (112, 112), (120, 112),
-                              (128, 112), (136, 112), (144, 112), (152, 112),
-                              (160, 112), (168, 112), (176, 112), (184, 112),
-                              (192, 112), (0, 92), (8, 92), (16, 92), (24, 92),
-                              (32, 92), (40, 92), (48, 92), (56, 92), (64, 92),
-                              (72, 92)])
+                             [(0, 112, (24, 8)), (8, 112, (24, 8)),
+                              (16, 112, (24, 8)), (24, 112, (24, 8)),
+                              (32, 112, (24, 8)), (40, 112, (24, 8)),
+                              (48, 112, (24, 8)), (56, 112, (24, 8)),
+                              (64, 112, (24, 8)), (72, 112, (24, 8)),
+                              (80, 112, (24, 8)), (88, 112, (24, 8)),
+                              (96, 112, (24, 8)), (104, 112, (24, 8)),
+                              (112, 112, (24, 8)), (120, 112, (24, 8)),
+                              (128, 112, (24, 8)), (136, 112, (24, 8)),
+                              (144, 112, (24, 8)), (152, 112, (24, 8)),
+                              (160, 112, (24, 8)), (168, 112, (24, 8)),
+                              (176, 112, (24, 8)), (184, 112, (24, 8)),
+                              (192, 112, (24, 8)), (0, 92, (24, 8)),
+                              (8, 92, (24, 8)), (16, 92, (24, 8)),
+                              (24, 92, (24, 8)), (32, 92, (24, 8)),
+                              (40, 92, (24, 8)), (48, 92, (24, 8)),
+                              (56, 92, (24, 8)), (64, 92, (24, 8)),
+                              (72, 92, (24, 8))])
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
-                             [(0, 112), (8, 112), (16, 112), (24, 112),
-                              (32, 112), (40, 112), (48, 112), (56, 112),
-                              (64, 112), (72, 112), (80, 112), (88, 112),
-                              (96, 112), (104, 112), (112, 112), (120, 112),
-                              (128, 112), (136, 112), (144, 112), (152, 112),
-                              (160, 112), (168, 112), (176, 112), (184, 112),
-                              (192, 112), (20, 104)], (32, 8))
+                             [(0, 112, (24, 8)), (8, 112, (24, 8)),
+                              (16, 112, (24, 8)), (24, 112, (24, 8)),
+                              (32, 112, (24, 8)), (40, 112, (24, 8)),
+                              (48, 112, (24, 8)), (56, 112, (24, 8)),
+                              (64, 112, (24, 8)), (72, 112, (24, 8)),
+                              (80, 112, (24, 8)), (88, 112, (24, 8)),
+                              (96, 112, (24, 8)), (104, 112, (24, 8)),
+                              (112, 112, (24, 8)), (120, 112, (24, 8)),
+                              (128, 112, (24, 8)), (136, 112, (24, 8)),
+                              (144, 112, (24, 8)), (152, 112, (24, 8)),
+                              (160, 112, (24, 8)), (168, 112, (24, 8)),
+                              (176, 112, (24, 8)), (184, 112, (24, 8)),
+                              (192, 112, (24, 8)), (20, 104, (24, 8))], (32, 8))
         self.levels = [level1, level2]
 
         self.choosed_level = 0
@@ -1038,7 +1095,6 @@ class App:  # game class
         #     self.score = self.enemies.score
         #     self.punch_pos = set()
 
-
     def __enemies_updates(self):
         self.enemies.hero_dir_right = False if self.hero.w > 0 else True
         self.enemies.punch_control(self.hero.get_punch_positions())
@@ -1065,23 +1121,36 @@ class App:  # game class
 
     def play(self, btn):
         level1 = Level([8, 84], [[150, 104], [180, 104]],
-                       [(0, 112), (8, 112), (16, 112), (24, 112),
-                        (32, 112), (40, 112), (48, 112), (56, 112),
-                        (64, 112), (72, 112), (80, 112), (88, 112),
-                        (96, 112), (104, 112), (112, 112), (120, 112),
-                        (128, 112), (136, 112), (144, 112), (152, 112),
-                        (160, 112), (168, 112), (176, 112), (184, 112),
-                        (192, 112), (0, 92), (8, 92), (16, 92), (24, 92),
-                        (32, 92), (40, 92), (48, 92), (56, 92), (64, 92),
-                        (72, 92)])
+                       [(0, 112, (24, 8)), (8, 112, (24, 8)),
+                        (16, 112, (24, 8)), (24, 112, (24, 8)),
+                        (32, 112, (24, 8)), (40, 112, (24, 8)),
+                        (48, 112, (24, 8)), (56, 112, (24, 8)),
+                        (64, 112, (24, 8)), (72, 112, (24, 8)),
+                        (80, 112, (24, 8)), (88, 112, (24, 8)),
+                        (96, 112, (24, 8)), (104, 112, (24, 8)),
+                        (112, 112, (24, 8)), (120, 112, (24, 8)),
+                        (128, 112, (24, 8)), (136, 112, (24, 8)),
+                        (144, 112, (24, 8)), (152, 112, (24, 8)),
+                        (160, 112, (24, 8)), (168, 112, (24, 8)),
+                        (176, 112, (24, 8)), (184, 112, (24, 8)),
+                        (192, 112, (24, 8)), (0, 92, (24, 8)),
+                        (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
+                        (32, 92, (24, 8)), (40, 92, (24, 8)), (48, 92, (24, 8)),
+                        (56, 92, (24, 8)), (64, 92, (24, 8)), (72, 92, (24, 8))])
         level2 = Level([8, 10], [[150, 104], [180, 104]],
-                       [(0, 112), (8, 112), (16, 112), (24, 112),
-                        (32, 112), (40, 112), (48, 112), (56, 112),
-                        (64, 112), (72, 112), (80, 112), (88, 112),
-                        (96, 112), (104, 112), (112, 112), (120, 112),
-                        (128, 112), (136, 112), (144, 112), (152, 112),
-                        (160, 112), (168, 112), (176, 112), (184, 112),
-                        (192, 112), (40, 104)], (72, 8))
+                       [(0, 112, (24, 8)), (8, 112, (24, 8)),
+                        (16, 112, (24, 8)), (24, 112, (24, 8)),
+                        (32, 112, (24, 8)), (40, 112, (24, 8)),
+                        (48, 112, (24, 8)), (56, 112, (24, 8)),
+                        (64, 112, (24, 8)), (72, 112, (24, 8)),
+                        (80, 112, (24, 8)), (88, 112, (24, 8)),
+                        (96, 112, (24, 8)), (104, 112, (24, 8)),
+                        (112, 112, (24, 8)), (120, 112, (24, 8)),
+                        (128, 112, (24, 8)), (136, 112, (24, 8)),
+                        (144, 112, (24, 8)), (152, 112, (24, 8)),
+                        (160, 112, (24, 8)), (168, 112, (24, 8)),
+                        (176, 112, (24, 8)), (184, 112, (24, 8)),
+                        (192, 112, (24, 8)), (40, 104, (24, 8))], (72, 8))
 
         self.levels = [level1, level2]
         self.flash_pos = self.levels[
@@ -1099,24 +1168,38 @@ class App:  # game class
 
     def reset(self, btn):
         level1 = Level([8, 84], [[150, 104], [180, 104]],
-                       [(0, 112), (8, 112), (16, 112), (24, 112),
-                        (32, 112), (40, 112), (48, 112), (56, 112),
-                        (64, 112), (72, 112), (80, 112), (88, 112),
-                        (96, 112), (104, 112), (112, 112), (120, 112),
-                        (128, 112), (136, 112), (144, 112), (152, 112),
-                        (160, 112), (168, 112), (176, 112), (184, 112),
-                        (192, 112), (0, 92), (8, 92), (16, 92), (24, 92),
-                        (32, 92), (40, 92), (48, 92), (56, 92), (64, 92),
-                        (72, 92)])
+                       [(0, 112, (24, 8)), (8, 112, (24, 8)),
+                        (16, 112, (24, 8)), (24, 112, (24, 8)),
+                        (32, 112, (24, 8)), (40, 112, (24, 8)),
+                        (48, 112, (24, 8)), (56, 112, (24, 8)),
+                        (64, 112, (24, 8)), (72, 112, (24, 8)),
+                        (80, 112, (24, 8)), (88, 112, (24, 8)),
+                        (96, 112, (24, 8)), (104, 112, (24, 8)),
+                        (112, 112, (24, 8)), (120, 112, (24, 8)),
+                        (128, 112, (24, 8)), (136, 112, (24, 8)),
+                        (144, 112, (24, 8)), (152, 112, (24, 8)),
+                        (160, 112, (24, 8)), (168, 112, (24, 8)),
+                        (176, 112, (24, 8)), (184, 112, (24, 8)),
+                        (192, 112, (24, 8)), (0, 92, (24, 8)),
+                        (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
+                        (32, 92, (24, 8)), (40, 92, (24, 8)),
+                        (48, 92, (24, 8)), (56, 92, (24, 8)),
+                        (64, 92, (24, 8)), (72, 92, (24, 8))])
 
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
-                       [(0, 112), (8, 112), (16, 112), (24, 112),
-                        (32, 112), (40, 112), (48, 112), (56, 112),
-                        (64, 112), (72, 112), (80, 112), (88, 112),
-                        (96, 112), (104, 112), (112, 112), (120, 112),
-                        (128, 112), (136, 112), (144, 112), (152, 112),
-                        (160, 112), (168, 112), (176, 112), (184, 112),
-                        (192, 112)], (72, 8))
+                       [(0, 112, (24, 8)), (8, 112, (24, 8)),
+                        (16, 112, (24, 8)), (24, 112, (24, 8)),
+                        (32, 112, (24, 8)), (40, 112, (24, 8)),
+                        (48, 112, (24, 8)), (56, 112, (24, 8)),
+                        (64, 112, (24, 8)), (72, 112, (24, 8)),
+                        (80, 112, (24, 8)), (88, 112, (24, 8)),
+                        (96, 112, (24, 8)), (104, 112, (24, 8)),
+                        (112, 112, (24, 8)), (120, 112, (24, 8)),
+                        (128, 112, (24, 8)), (136, 112, (24, 8)),
+                        (144, 112, (24, 8)), (152, 112, (24, 8)),
+                        (160, 112, (24, 8)), (168, 112, (24, 8)),
+                         (176, 112, (24, 8)), (184, 112, (24, 8)),
+                        (192, 112, (24, 8))], (72, 8))
 
         self.levels = [level1, level2]
         self.flash_pos = self.levels[
