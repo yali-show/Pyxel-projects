@@ -26,8 +26,14 @@ class Block:  # blocks and barier class
                            for x in range(self.x + 1, self.x + 7)
                            for y in range(self.y + 1, self.y + 7)}
 
+        if self.dangerous:
+            self.all_positions = {(x, y)
+                           for x in range(self.x, self.x + 8)
+                           for y in range(self.y, self.y + 8)}
+
     def draw(self):
-        pyxel.blt(self.x, self.y, 0, self.texture[0], self.texture[1], 8, 8)
+        pyxel.blt(self.x, self.y, 0, self.texture[0], self.texture[1], 8, 8,
+                  colkey=self.texture[2] if len(self.texture) == 3 else None)
 
 
 class Constructor:  # aggregator of blocks objects
@@ -36,7 +42,7 @@ class Constructor:  # aggregator of blocks objects
         # self.texture = texture
         self.blocks, self.dangerous_blocks = self.__create_platform()
         self.positions = self.__col_positions()
-        self.inside_positions, self.dangerous_inside_positions = self.__inside_pos()
+        self.inside_positions, self.dangerous_all_positions = self.__inside_pos()
 
     def __create_platform(self):
         """
@@ -64,28 +70,30 @@ class Constructor:  # aggregator of blocks objects
 
         result = (set(), set(), set(), {})
         for block in self.blocks:
-            result[0].update(block.top_positions)
-            result[1].update(block.sides_positions)
-            result[2].update(block.bottom_positions)
-            y = block.y
-            if y in result[3]:
-                result[3][y].append(block.x)
-            else:
-                result[3][y] = [block.x]
+            if not block.dangerous:
+                result[0].update(block.top_positions)
+                result[1].update(block.sides_positions)
+                result[2].update(block.bottom_positions)
+                y = block.y
+
+                if y in result[3]:
+                    result[3][y].append(block.x)
+                else:
+                    result[3][y] = [block.x]
         return result
 
     def __inside_pos(self):
         """
         :return: set of positions inside blocks
         """
-        block_inside, dangerous_inside = set(), set()
+        block_inside, dangerous = set(), set()
         for block in self.blocks:
             block_inside.update(block.inside_pos)
 
         for block in self.dangerous_blocks:
-            dangerous_inside.update(block.inside_pos)
+            dangerous.update(block.all_positions)
 
-        return block_inside, dangerous_inside
+        return block_inside, dangerous
 
     def draw(self):
         for block in self.blocks:
@@ -515,13 +523,12 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
 
 class Cameraman:  # user class
-    def __init__(self, x, y, blocks_pos, inside_blocks_pos,
-                 dangerous_blocks_pos, inside_dangerous_blocks_pos, enemies):
+    def __init__(self, x, y, blocks_pos, inside_blocks_pos, dangerous_blocks_pos, enemies):
         # tuple of sets of coordinates of all blocks
         self.blocks_positions = blocks_pos
         self.inside_blocks_pos = inside_blocks_pos
         self.dangerous_blocks_pos = dangerous_blocks_pos
-        self.inside_dangerous_blocks_pos = inside_dangerous_blocks_pos
+        # self.inside_dangerous_blocks_pos = inside_dangerous_blocks_pos
 
         self.enemies = enemies
 
@@ -642,6 +649,7 @@ class Cameraman:  # user class
                     self.y -= 5
 
             else:
+
                 self.onground = True
                 self.jump_count = 20
                 if not self.in_jump:
@@ -751,6 +759,22 @@ class Cameraman:  # user class
 
     def __get_damaged(self):  # check if user was damaged
         if not self.immortal:
+            all_pos = set().union(self.bottom_positions,
+                                  self.sides_positions_left, self.sides_positions_right)
+
+            if all_pos.intersection(self.dangerous_blocks_pos):
+                self.health -= 1
+                if self.health == 0:
+                    self.alive = False
+                    pyxel.stop()
+                    pyxel.play(2, 8)
+
+                else:
+                    pyxel.play(2, 4)
+
+                self.immortal = True
+                self.immortal_timer = 50
+
             if self.bottom_positions.intersection(self.enemies.all_positions):
 
                 self.health -= 1
@@ -763,10 +787,10 @@ class Cameraman:  # user class
                     pyxel.play(2, 4)
                 if self.onground:
                     self.x -= self.w // 8 * 10
-                    self.y -= 10
+                    # self.y -= 10
                 else:
                     self.x -= self.w // 8 * 20
-                    self.y -= 10
+                    # self.y -= 10
 
                 self.immortal = True
                 self.immortal_timer = 50
@@ -851,12 +875,13 @@ class Level:  # level class
         self.blocks = Constructor(contructor_pos)
         self.enemies = EnemiesControl(self.blocks.positions, self.hero_pos,
                                       self.flash_pos, enemies_pos)
+        # print(self.blocks.dangerous_blocks)
+        # print(self.blocks.dangerous_inside_positions)
         self.hero = Cameraman(x=hero_pos[0], y=hero_pos[1],
                               blocks_pos=self.blocks.positions,
                               inside_blocks_pos=self.blocks.inside_positions,
                               enemies=self.enemies,
-                              dangerous_blocks_pos=self.blocks.dangerous_blocks,
-                              inside_dangerous_blocks_pos=self.blocks.dangerous_inside_positions)
+                              dangerous_blocks_pos=self.blocks.dangerous_all_positions)
 
         self.tilemap = background
         self.music_track = music
@@ -927,8 +952,7 @@ class App:  # game class
                               (8, 92, (24, 8)), (16, 92, (24, 8)),
                               (24, 92, (24, 8)), (32, 92, (24, 8)),
                               (40, 92, (24, 8)), (48, 92, (24, 8)),
-                              (56, 92, (24, 8)), (64, 92, (24, 8)),
-                              (72, 92, (24, 8))])
+                              (64, 84, (24, 8), True), (72, 92, (24, 8))])
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
                              [(0, 112, (24, 8)), (8, 112, (24, 8)),
                               (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -1136,7 +1160,8 @@ class App:  # game class
                         (192, 112, (24, 8)), (0, 92, (24, 8)),
                         (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
                         (32, 92, (24, 8)), (40, 92, (24, 8)), (48, 92, (24, 8)),
-                        (56, 92, (24, 8)), (64, 92, (24, 8)), (72, 92, (24, 8))])
+                        (56, 92, (24, 8)), (64, 92, (24, 8)), (64, 84, (24, 8),
+                        True), (72, 92, (24, 8))])
         level2 = Level([8, 10], [[150, 104], [180, 104]],
                        [(0, 112, (24, 8)), (8, 112, (24, 8)),
                         (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -1184,7 +1209,8 @@ class App:  # game class
                         (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
                         (32, 92, (24, 8)), (40, 92, (24, 8)),
                         (48, 92, (24, 8)), (56, 92, (24, 8)),
-                        (64, 92, (24, 8)), (72, 92, (24, 8))])
+                        (64, 92, (24, 8)), (64, 84, (128, 0, 0), True),
+                        (72, 92, (24, 8))])
 
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
                        [(0, 112, (24, 8)), (8, 112, (24, 8)),
