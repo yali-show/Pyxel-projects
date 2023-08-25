@@ -1,4 +1,5 @@
 import pyxel
+from random import choice
 
 
 class Block:  # blocks and barier class
@@ -39,7 +40,6 @@ class Block:  # blocks and barier class
 class Constructor:  # aggregator of blocks objects
     def __init__(self, blocks_pos):
         self.blocks_pos = blocks_pos
-        # self.texture = texture
         self.blocks, self.dangerous_blocks = self.__create_platform()
         self.positions = self.__col_positions()
         self.inside_positions, self.dangerous_all_positions = self.__inside_pos()
@@ -88,7 +88,8 @@ class Constructor:  # aggregator of blocks objects
         """
         block_inside, dangerous = set(), set()
         for block in self.blocks:
-            block_inside.update(block.inside_pos)
+            if not block.dangerous:
+                block_inside.update(block.inside_pos)
 
         for block in self.dangerous_blocks:
             dangerous.update(block.all_positions)
@@ -123,11 +124,17 @@ class ToiletEnemy:  # default toilet enemy class
         self.alive = True
         self.flashed = False
         self.damaged = False
+
+        self.item = False
+
         self.all_positions = {(x, y)
                               for x in range(self.x, self.x + 8)
                               for y in range(self.y, self.y + 9)}
         self.all_positions_flashed = self.all_positions
         self.direction_rigth = dir_rigth
+
+    def set_item(self, door_pos, key_door_sprites):
+        self.item = KeyDoor(((self.x, self.y), door_pos), key_door_sprites)
 
     def animate(self):
         if self.animation_count >= 20:
@@ -165,6 +172,7 @@ class ToiletEnemy:  # default toilet enemy class
                           self.points_anim[self.animation_count // 5][0],
                           self.points_anim[self.animation_count // 5][1],
                           12, 8, 0)
+
             self.deth_timer -= 1
 
     def update_pos(self):
@@ -254,6 +262,15 @@ class ToiletEnemy:  # default toilet enemy class
 
     def draw(self):
         self.animate()
+        if not self.alive and self.item:
+            if self.h == 16:
+                self.item.update_pos(self.x + 6, self.y + 8)
+            elif self.h == 5:
+                self.item.update_pos(self.x, self.y - 3)
+            else:
+                self.item.update_pos(self.x, self.y)
+            if self.deth_timer < -30:
+                self.item.draw()
 
 
 class SmallToilet(ToiletEnemy):
@@ -296,6 +313,7 @@ class SmallToilet(ToiletEnemy):
                           self.points_anim[self.animation_count // 5][0],
                           self.points_anim[self.animation_count // 5][1],
                           15, 8, 0)
+
             self.deth_timer -= 1
 
     def move(self):
@@ -337,7 +355,7 @@ class BigToilet(ToiletEnemy):
         super().__init__(x, y, blocks_pos, hero, dir_rigth)
         self.animation = ((16, 16), (0, 16), (0, 16), (32, 16), (16, 16))
         self.flashed_animation = ((0, 16), (64, 16), (64, 16), (64, 16), (0, 16))
-        self.points_anim =  ((96, 0), (96, 8), (96, 0), (96, 8), (96, 0))
+        self.points_anim = ((96, 0), (96, 8), (96, 0), (96, 8), (96, 0))
         self.w = 16
         self.h = 16
         self.flash_y = self.y + 8
@@ -385,14 +403,21 @@ class BigToilet(ToiletEnemy):
                 pyxel.blt(self.x - self.w/2, self.y + 8, 0,
                           self.points_anim[self.animation_count // 5][0],
                           self.points_anim[self.animation_count // 5][1],
-                          12
-                          , 8, 0)
+                          12, 8, 0)
+
             self.deth_timer -= 1
 
     def move(self):
         if self.direction_rigth:
             bottom_side_pos = (round(self.x) + 16, self.y + 16)
             side_pos = (round(self.x) + 16, self.y + 8)
+            head_positions = {(round(self.x) + 16, y)
+                              for y in range(self.y, self.y + 8)}
+
+            if head_positions.intersection(self.positions[1]):
+                self.direction_rigth = False
+                self.w = -16
+                self.targeted = False
 
             if bottom_side_pos in self.positions[0]\
                     and side_pos not in self.positions[1]:
@@ -420,6 +445,14 @@ class BigToilet(ToiletEnemy):
                 self.direction_rigth = True
                 self.w = 16
                 self.targeted = False
+
+            head_positions = {(round(self.x), y)
+                              for y in range(self.y, self.y + 8)}
+            if head_positions.intersection(self.positions[1]):
+                self.direction_rigth = True
+                self.w = 16
+                self.targeted = False
+
         self.update_pos()
 
     def update_pos(self):
@@ -436,14 +469,18 @@ class BigToilet(ToiletEnemy):
 
 class EnemiesControl:  # aggregator of toilets/enemies
     def __init__(self, blocks, hero_pos, flash_pos,
-                 toilet_pos=None, hero_direction=True):
+                 toilet_pos=None, door_pos=(100, 100),
+                 door_key_sprites=((128, 8), (144, 8)), hero_direction=True):
+
         self.blocks = blocks
         self.hero = hero_pos
         self.toilet_pos = toilet_pos
         self.light_pos = flash_pos
+        self.hero_dir_right = hero_direction
+        self.door_sprite = door_key_sprites
+        self.door = door_pos
         self.score = 0
         self.punch_pos = set()
-        self.hero_dir_right = hero_direction
         self.toilets = self.__setup_enemies()
         self.toilets_alive = ...
         self.positions()
@@ -457,6 +494,8 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
         result.append(BigToilet(100, 96, self.blocks, self.hero))
         result.append(SmallToilet(80, 107, self.blocks, self.hero))
+
+        choice(result).set_item(self.door, self.door_sprite)
 
         return result
 
@@ -547,6 +586,7 @@ class Cameraman:  # user class
         self.immortal_timer = 50
         self.flash_timer = 150
         self.punch_timer = 0
+        self.can_move_counter = 10
         self.jump_count = 20
         self.animation_count = 0
         self.animation_immortal = ((40, 0), (32, 8), (40, 0), (40, 0), (40, 0))
@@ -635,9 +675,6 @@ class Cameraman:  # user class
         if self.alive:
             self.__falling_check()
             self.__get_damaged()
-
-            # TODO make dangerous blocks check
-            # if self.bottom_positions.intersection(self.dangerous_blocks_pos[0]):
 
             if not self.bottom_positions.intersection(self.blocks_positions[0]):
                 self.onground = False
@@ -732,7 +769,9 @@ class Cameraman:  # user class
                     self.punch_timer -= 1.5
 
                 self.punch = False
-                self.can_move = True
+
+                if self.can_move_counter == 10:
+                    self.can_move = True
 
             if pyxel.btn(pyxel.KEY_X):
                 if self.camera_flash:
@@ -771,12 +810,17 @@ class Cameraman:  # user class
 
                 else:
                     pyxel.play(2, 4)
+                    self.can_move = False
+                    self.can_move_counter -= 0.5
+                    if self.onground:
+                        self.x -= self.w // 8 * 5
+                    else:
+                        self.y -= 10
 
                 self.immortal = True
                 self.immortal_timer = 50
 
             if self.bottom_positions.intersection(self.enemies.all_positions):
-
                 self.health -= 1
                 if self.health == 0:
                     self.alive = False
@@ -786,11 +830,12 @@ class Cameraman:  # user class
                 else:
                     pyxel.play(2, 4)
                 if self.onground:
-                    self.x -= self.w // 8 * 10
-                    # self.y -= 10
+                    self.x -= self.w // 8 * 5
+
+                    self.can_move_counter -= 0.5
+                    self.can_move = False
                 else:
-                    self.x -= self.w // 8 * 20
-                    # self.y -= 10
+                    self.x -= self.w // 8 * 10
 
                 self.immortal = True
                 self.immortal_timer = 50
@@ -798,6 +843,12 @@ class Cameraman:  # user class
         else:
             if self.immortal_timer > 0:
                 self.immortal_timer -= 0.5
+                if not self.can_move:
+                    self.can_move_counter -= 0.5
+
+                if self.can_move_counter == 0:
+                    self.can_move = True
+                    self.can_move_counter = 10
 
             else:
                 self.immortal_timer = 50
@@ -875,8 +926,6 @@ class Level:  # level class
         self.blocks = Constructor(contructor_pos)
         self.enemies = EnemiesControl(self.blocks.positions, self.hero_pos,
                                       self.flash_pos, enemies_pos)
-        # print(self.blocks.dangerous_blocks)
-        # print(self.blocks.dangerous_inside_positions)
         self.hero = Cameraman(x=hero_pos[0], y=hero_pos[1],
                               blocks_pos=self.blocks.positions,
                               inside_blocks_pos=self.blocks.inside_positions,
@@ -895,10 +944,9 @@ class Level:  # level class
 
 
 class KeyDoor:
-    def __init__(self, level_num: int, positions: tuple, sprites: tuple):
-        self.level = level_num
+    def __init__(self, positions: tuple, sprites: tuple):
         self.key_sprite = sprites[0]
-        self.door_sprite = sprites[0]
+        self.door_sprite = sprites[1]
         self.key_pos = positions[0]   # key pos (x, y)
         self.door_pos = positions[1]  # door pos (x, y)
         self.all_key_pos = {(x, y)
@@ -906,20 +954,19 @@ class KeyDoor:
                             for y in range(self.key_pos[1], self.key_pos[1] + 5)}
 
         self.all_door_pos = {(x, y)
-                            for x in range(self.door_pos[0], self.door_pos[0] + 5)
-                            for y in range(self.door_pos[1], self.door_pos[1] + 5)}
+                            for x in range(self.door_pos[0], self.door_pos[0] + 8)
+                            for y in range(self.door_pos[1], self.door_pos[1] + 8)}
 
         self.activated = False
         self.key_touched = False
 
-    def update_key(self):
-        pass
+    def update_pos(self, x, y):
+        self.key_pos = (x, y)
 
     def draw(self):
-        if self.activated and not self.key_touched:
-            pyxel.blt(*self.key_pos, 0, *self.key_sprite, 5, 5, 0)
 
         pyxel.blt(*self.door_pos, 0, *self.door_sprite, 8, 8, 0)
+        pyxel.blt(*self.key_pos, 0, *self.key_sprite, 8, 8, 0)
 
 
 class ScoreBoard:
@@ -952,7 +999,7 @@ class App:  # game class
                               (8, 92, (24, 8)), (16, 92, (24, 8)),
                               (24, 92, (24, 8)), (32, 92, (24, 8)),
                               (40, 92, (24, 8)), (48, 92, (24, 8)),
-                              (64, 84, (24, 8), True), (72, 92, (24, 8))])
+                              (64, 84, (128, 0, 0), True), (72, 92, (24, 8))])
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
                              [(0, 112, (24, 8)), (8, 112, (24, 8)),
                               (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -1160,8 +1207,8 @@ class App:  # game class
                         (192, 112, (24, 8)), (0, 92, (24, 8)),
                         (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
                         (32, 92, (24, 8)), (40, 92, (24, 8)), (48, 92, (24, 8)),
-                        (56, 92, (24, 8)), (64, 92, (24, 8)), (64, 84, (24, 8),
-                        True), (72, 92, (24, 8))])
+                        (56, 92, (24, 8)), (64, 92, (24, 8)), (64, 104, (128, 0, 0),
+                        True), (72, 92, (24, 8)), (170, 92, (24, 8))])
         level2 = Level([8, 10], [[150, 104], [180, 104]],
                        [(0, 112, (24, 8)), (8, 112, (24, 8)),
                         (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -1207,10 +1254,10 @@ class App:  # game class
                         (176, 112, (24, 8)), (184, 112, (24, 8)),
                         (192, 112, (24, 8)), (0, 92, (24, 8)),
                         (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
-                        (32, 92, (24, 8)), (40, 92, (24, 8)),
-                        (48, 92, (24, 8)), (56, 92, (24, 8)),
-                        (64, 92, (24, 8)), (64, 84, (128, 0, 0), True),
-                        (72, 92, (24, 8))])
+                        (32, 92, (24, 8)), (40, 92, (24, 8)), (48, 92, (24, 8)),
+                        (56, 92, (24, 8)), (64, 92, (24, 8)),
+                        (64, 104, (128, 0, 0),
+                         True), (72, 92, (24, 8)), (170, 92, (24, 8))])
 
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
                        [(0, 112, (24, 8)), (8, 112, (24, 8)),
