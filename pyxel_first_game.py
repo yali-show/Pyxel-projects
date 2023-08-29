@@ -133,8 +133,9 @@ class ToiletEnemy:  # default toilet enemy class
         self.all_positions_flashed = self.all_positions
         self.direction_rigth = dir_rigth
 
-    def set_item(self, door_pos, key_door_sprites):
-        self.item = KeyDoor(((self.x, self.y), door_pos), key_door_sprites)
+    def set_item(self, door_pos, key_door_sprites, level):
+        self.item = KeyDoor(((self.x, self.y), door_pos), key_door_sprites,
+                            level)
 
     def animate(self):
         if self.animation_count >= 20:
@@ -262,15 +263,17 @@ class ToiletEnemy:  # default toilet enemy class
 
     def draw(self):
         self.animate()
-        if not self.alive and self.item:
-            if self.h == 16:
-                self.item.update_pos(self.x + 6, self.y + 8)
-            elif self.h == 5:
-                self.item.update_pos(self.x, self.y - 3)
-            else:
-                self.item.update_pos(self.x, self.y)
-            if self.deth_timer < -30:
-                self.item.draw()
+        if self.item:
+            if not self.alive:
+                if self.h == 16:
+                    self.item.update_pos(self.x + 6, self.y + 8)
+                elif self.h == 5:
+                    self.item.update_pos(self.x, self.y - 3)
+                else:
+                    self.item.update_pos(self.x, self.y)
+                if self.deth_timer < -30:
+                    self.item.activated = True
+            self.item.draw()
 
 
 class SmallToilet(ToiletEnemy):
@@ -468,12 +471,13 @@ class BigToilet(ToiletEnemy):
 
 
 class EnemiesControl:  # aggregator of toilets/enemies
-    def __init__(self, blocks, hero_pos, flash_pos,
+    def __init__(self, blocks, hero_pos, flash_pos, level,
                  toilet_pos=None, door_pos=(100, 100),
-                 door_key_sprites=((128, 8), (144, 8)), hero_direction=True):
+                 door_key_sprites=((136, 0), (144, 8)),  hero_direction=True):
 
         self.blocks = blocks
         self.hero = hero_pos
+        self.level = level
         self.toilet_pos = toilet_pos
         self.light_pos = flash_pos
         self.hero_dir_right = hero_direction
@@ -482,7 +486,6 @@ class EnemiesControl:  # aggregator of toilets/enemies
         self.score = 0
         self.punch_pos = set()
         self.toilets = self.__setup_enemies()
-        self.toilets_alive = ...
         self.positions()
 
     def __setup_enemies(self):
@@ -494,8 +497,9 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
         result.append(BigToilet(100, 96, self.blocks, self.hero))
         result.append(SmallToilet(80, 107, self.blocks, self.hero))
-
-        choice(result).set_item(self.door, self.door_sprite)
+        random_toilet = choice(result)
+        random_toilet.set_item(self.door, self.door_sprite, self.level)
+        self.keydoor = random_toilet.item
 
         return result
 
@@ -562,7 +566,8 @@ class EnemiesControl:  # aggregator of toilets/enemies
 
 
 class Cameraman:  # user class
-    def __init__(self, x, y, blocks_pos, inside_blocks_pos, dangerous_blocks_pos, enemies):
+    def __init__(self, x, y, blocks_pos, inside_blocks_pos,
+                 dangerous_blocks_pos, enemies):
         # tuple of sets of coordinates of all blocks
         self.blocks_positions = blocks_pos
         self.inside_blocks_pos = inside_blocks_pos
@@ -570,6 +575,7 @@ class Cameraman:  # user class
         # self.inside_dangerous_blocks_pos = inside_dangerous_blocks_pos
 
         self.enemies = enemies
+        self.key = self.enemies.keydoor
 
         # data of character
         self.x = x
@@ -801,6 +807,18 @@ class Cameraman:  # user class
             all_pos = set().union(self.bottom_positions,
                                   self.sides_positions_left, self.sides_positions_right)
 
+            if self.key.activated:
+                # print(1122)
+                if not self.key.key_touched:
+                    # print(self.key.all_key_pos)
+                    # print(all_pos)
+                    if all_pos.intersection(self.key.all_key_pos):
+                        self.key.key_touched = True
+
+                else:
+                    if all_pos.intersection(self.key.all_door_pos):
+                        self.key.door_touched = True
+
             if all_pos.intersection(self.dangerous_blocks_pos):
                 self.health -= 1
                 if self.health == 0:
@@ -917,15 +935,21 @@ class Button:  # buttons class (with mouse)
         self.function(self)
 
 
+class LevelControl:
+    def __init__(self, level_num, max_level=1):
+        self.max_level = max_level
+        self.level_num = level_num
+
+
 class Level:  # level class
     def __init__(self, hero_pos: list, enemies_pos: list, contructor_pos: list,
-                 background=None, music=None):
+                 level_num, background=None, music=None):
         self.score = ScoreBoard()
         self.flash_pos = [[], [None, ]]
         self.hero_pos = hero_pos
         self.blocks = Constructor(contructor_pos)
         self.enemies = EnemiesControl(self.blocks.positions, self.hero_pos,
-                                      self.flash_pos, enemies_pos)
+                                      self.flash_pos, level_num, enemies_pos)
         self.hero = Cameraman(x=hero_pos[0], y=hero_pos[1],
                               blocks_pos=self.blocks.positions,
                               inside_blocks_pos=self.blocks.inside_positions,
@@ -937,6 +961,7 @@ class Level:  # level class
 
     def draw(self):
         if self.tilemap:
+            print(self.tilemap)
             pyxel.bltm(self.tilemap[0], self.tilemap[1], self.tilemap[2], 0, 0,
                        200, 120)
         else:
@@ -944,11 +969,12 @@ class Level:  # level class
 
 
 class KeyDoor:
-    def __init__(self, positions: tuple, sprites: tuple):
+    def __init__(self, positions: tuple, sprites: tuple, level):
         self.key_sprite = sprites[0]
         self.door_sprite = sprites[1]
         self.key_pos = positions[0]   # key pos (x, y)
         self.door_pos = positions[1]  # door pos (x, y)
+        self.level = level
         self.all_key_pos = {(x, y)
                             for x in range(self.key_pos[0], self.key_pos[0] + 5)
                             for y in range(self.key_pos[1], self.key_pos[1] + 5)}
@@ -959,14 +985,28 @@ class KeyDoor:
 
         self.activated = False
         self.key_touched = False
+        self.door_touched = False
+
+    def __check_updates(self):
+        if self.activated:
+            if self.key_touched:
+                if self.door_touched:
+                    if not self.level.level_num == self.level.max_level:
+                        self.level.level_num += 1
 
     def update_pos(self, x, y):
-        self.key_pos = (x, y)
+        self.key_pos = (round(x), round(y))
+        self.all_key_pos = {(x, y)
+                            for x in range(self.key_pos[0], self.key_pos[0] + 5)
+                            for y in
+                            range(self.key_pos[1], self.key_pos[1] + 5)}
 
     def draw(self):
 
         pyxel.blt(*self.door_pos, 0, *self.door_sprite, 8, 8, 0)
-        pyxel.blt(*self.key_pos, 0, *self.key_sprite, 8, 8, 0)
+        if self.activated and not self.key_touched:
+            pyxel.blt(*self.key_pos, 0, *self.key_sprite, 8, 8, 0)
+        self.__check_updates()
 
 
 class ScoreBoard:
@@ -982,6 +1022,7 @@ class App:  # game class
         pyxel.image(2).load(0, -16,
                             'assets/6682da62-dbd1-4c52-ba0c-4c95bf00264b.png')
         # pyxel.playm(0, loop=True)
+        self.choosed_level = LevelControl(0)
         level1 = Level([8, 84], [[150, 104], [180, 104]],
                              [(0, 112, (24, 8)), (8, 112, (24, 8)),
                               (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -999,7 +1040,9 @@ class App:  # game class
                               (8, 92, (24, 8)), (16, 92, (24, 8)),
                               (24, 92, (24, 8)), (32, 92, (24, 8)),
                               (40, 92, (24, 8)), (48, 92, (24, 8)),
-                              (64, 84, (128, 0, 0), True), (72, 92, (24, 8))])
+                              (64, 84, (128, 0, 0), True), (72, 92, (24, 8))],
+                       self.choosed_level)
+
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
                              [(0, 112, (24, 8)), (8, 112, (24, 8)),
                               (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -1013,17 +1056,17 @@ class App:  # game class
                               (144, 112, (24, 8)), (152, 112, (24, 8)),
                               (160, 112, (24, 8)), (168, 112, (24, 8)),
                               (176, 112, (24, 8)), (184, 112, (24, 8)),
-                              (192, 112, (24, 8)), (20, 104, (24, 8))], (32, 8))
+                              (192, 112, (24, 8)), (20, 104, (24, 8))],
+                       self.choosed_level, (32, 8))
         self.levels = [level1, level2]
 
-        self.choosed_level = 0
-        self.score_controll = self.levels[self.choosed_level].score
-        self.flash_pos = self.levels[self.choosed_level].flash_pos  # ((x, y), (direction))
-        self.hero_positions = self.levels[self.choosed_level].hero_pos  # (x, y)
-        self.blocks_controller = self.levels[self.choosed_level].blocks
-        self.hero = self.levels[self.choosed_level].hero
+        self.score_controll = self.levels[self.choosed_level.level_num].score
+        self.flash_pos = self.levels[self.choosed_level.level_num].flash_pos  # ((x, y), (direction))
+        self.hero_positions = self.levels[self.choosed_level.level_num].hero_pos  # (x, y)
+        self.blocks_controller = self.levels[self.choosed_level.level_num].blocks
+        self.hero = self.levels[self.choosed_level.level_num].hero
 
-        self.enemies = self.levels[self.choosed_level].enemies
+        self.enemies = self.levels[self.choosed_level.level_num].enemies
         self.punch_pos = set()
 
         self.start_menu = True
@@ -1088,14 +1131,6 @@ class App:  # game class
                 pyxel.play(2, 9)
                 if self.start_menu:
                     self.control_menu_keys(self.start_buttons)
-                # if self.start_menu:
-                #
-                #     if len(self.start_buttons) * -1 > self.counter_choose - 1:
-                #         self.counter_choose = 1
-                #     else:
-                #         self.counter_choose -= 1
-                #
-                #     self.button_update(self.start_buttons)
                 elif self.in_pause:
                     self.control_menu_keys(self.in_pause_buttons)
 
@@ -1154,17 +1189,17 @@ class App:  # game class
         # switch level (need in refactor)
         # if self.enemies.score > 10:
         #     self.choosed_level += 1
-        #     self.score_controll = self.levels[self.choosed_level].score
-        #     self.flash_pos = self.levels[
-        #         self.choosed_level].flash_pos  # ((x, y), (direction))
-        #     self.hero_positions = self.levels[
-        #         self.choosed_level].hero_pos  # (x, y)
-        #     self.blocks_controller = self.levels[self.choosed_level].blocks
-        #     self.hero = self.levels[self.choosed_level].hero
-        #
-        #     self.enemies = self.levels[self.choosed_level].enemies
-        #     self.score = self.enemies.score
-        #     self.punch_pos = set()
+        self.score_controll = self.levels[self.choosed_level.level_num].score
+        self.flash_pos = self.levels[
+            self.choosed_level.level_num].flash_pos  # ((x, y), (direction))
+        self.hero_positions = self.levels[
+            self.choosed_level.level_num].hero_pos  # (x, y)
+        self.blocks_controller = self.levels[self.choosed_level.level_num].blocks
+        self.hero = self.levels[self.choosed_level.level_num].hero
+
+        self.enemies = self.levels[self.choosed_level.level_num].enemies
+        self.score = self.enemies.score
+        self.punch_pos = set()
 
     def __enemies_updates(self):
         self.enemies.hero_dir_right = False if self.hero.w > 0 else True
@@ -1208,7 +1243,8 @@ class App:  # game class
                         (8, 92, (24, 8)), (16, 92, (24, 8)), (24, 92, (24, 8)),
                         (32, 92, (24, 8)), (40, 92, (24, 8)), (48, 92, (24, 8)),
                         (56, 92, (24, 8)), (64, 92, (24, 8)), (64, 104, (128, 0, 0),
-                        True), (72, 92, (24, 8)), (170, 92, (24, 8))])
+                        True), (72, 92, (24, 8)), (170, 92, (24, 8))],
+                       self.choosed_level)
         level2 = Level([8, 10], [[150, 104], [180, 104]],
                        [(0, 112, (24, 8)), (8, 112, (24, 8)),
                         (16, 112, (24, 8)), (24, 112, (24, 8)),
@@ -1222,15 +1258,16 @@ class App:  # game class
                         (144, 112, (24, 8)), (152, 112, (24, 8)),
                         (160, 112, (24, 8)), (168, 112, (24, 8)),
                         (176, 112, (24, 8)), (184, 112, (24, 8)),
-                        (192, 112, (24, 8)), (40, 104, (24, 8))], (72, 8))
+                        (192, 112, (24, 8)), (40, 104, (24, 8))],
+                       self.choosed_level)
 
         self.levels = [level1, level2]
         self.flash_pos = self.levels[
-            self.choosed_level].flash_pos  # ((x, y), (direction))
-        self.hero_positions = self.levels[self.choosed_level].hero_pos  # (x, y)
-        self.blocks_controller = self.levels[self.choosed_level].blocks
-        self.hero = self.levels[self.choosed_level].hero
-        self.enemies = self.levels[self.choosed_level].enemies
+            self.choosed_level.level_num].flash_pos  # ((x, y), (direction))
+        self.hero_positions = self.levels[self.choosed_level.level_num].hero_pos  # (x, y)
+        self.blocks_controller = self.levels[self.choosed_level.level_num].blocks
+        self.hero = self.levels[self.choosed_level.level_num].hero
+        self.enemies = self.levels[self.choosed_level.level_num].enemies
 
         self.in_game = True
         self.in_pause = False
@@ -1257,7 +1294,8 @@ class App:  # game class
                         (32, 92, (24, 8)), (40, 92, (24, 8)), (48, 92, (24, 8)),
                         (56, 92, (24, 8)), (64, 92, (24, 8)),
                         (64, 104, (128, 0, 0),
-                         True), (72, 92, (24, 8)), (170, 92, (24, 8))])
+                         True), (72, 92, (24, 8)), (170, 92, (24, 8))],
+                       self.choosed_level)
 
         level2 = Level([8, 10], [[10, 104], [150, 104], [180, 104]],
                        [(0, 112, (24, 8)), (8, 112, (24, 8)),
@@ -1272,15 +1310,15 @@ class App:  # game class
                         (144, 112, (24, 8)), (152, 112, (24, 8)),
                         (160, 112, (24, 8)), (168, 112, (24, 8)),
                          (176, 112, (24, 8)), (184, 112, (24, 8)),
-                        (192, 112, (24, 8))], (72, 8))
+                        (192, 112, (24, 8))], self.choosed_level, (72, 8))
 
         self.levels = [level1, level2]
         self.flash_pos = self.levels[
-            self.choosed_level].flash_pos  # ((x, y), (direction))
-        self.hero_positions = self.levels[self.choosed_level].hero_pos  # (x, y)
-        self.blocks_controller = self.levels[self.choosed_level].blocks
-        self.hero = self.levels[self.choosed_level].hero
-        self.enemies = self.levels[self.choosed_level].enemies
+            self.choosed_level.level_num].flash_pos  # ((x, y), (direction))
+        self.hero_positions = self.levels[self.choosed_level.level_num].hero_pos  # (x, y)
+        self.blocks_controller = self.levels[self.choosed_level.level_num].blocks
+        self.hero = self.levels[self.choosed_level.level_num].hero
+        self.enemies = self.levels[self.choosed_level.level_num].enemies
 
         self.in_game = True
         self.in_pause = False
@@ -1313,9 +1351,7 @@ class App:  # game class
     def draw(self):
 
         if self.in_game:
-            self.levels[self.choosed_level].draw()
-            # pyxel.bltm(0, 0, 0, 0, 0, 200, 120)
-            # pyxel.blt(0, 0, 2, 0, 0, 200, 120)
+            self.levels[self.choosed_level.level_num].draw()
             self.draw_in_game()
 
         elif self.dead:
